@@ -1,6 +1,10 @@
 1 || require('./app.js')
 export { Tabs }
 
+import OPENAI_API_KEY from './key.js'
+// const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY';
+
+
 class Tabs {
   constructor(data) {
     this.data = data
@@ -59,29 +63,85 @@ class Tabs {
     this.tabs.onclick = (e) => {
       if (e.target === this.tabs) return
       if (e.target.matches('.shadow')) return this.addTab()
+      if (e.target.matches('.close')) return this.removeTab(e.target.parentNode.dataset.index)
+
       this.tabs.querySelector('.active').classList.remove('active')
-      e.target.classList.add('active')
       this.tabsContent.querySelector('.tab-content:not([hidden])').hidden = true
+
+      e.target.classList.add('active')
       this.tabsContent.children[e.target.dataset.index].hidden = false
+
     }
   }
 
-  addTab() {
+  async addTab() {
     const tab = document.createElement('li')
-    this.tabs.querySelector('.active').classList.remove('active')
-    tab.classList.add('tab', 'active')
     const tabContent = document.createElement('li')
-    tabContent.textContent = ' here is bla bla bla...'
-    this.tabsContent.querySelector('.tab-content:not([hidden])').hidden = true
-    this.tabsContent.append(tabContent)
     const btnClose = document.createElement('button')
+    const index = this.data.length
+    const tabTitle = 'tab' + (index + 1)
+    const content = `${await this.generateContentGPT()}` //' here is bla bla bla...'
+
+    this.data.push({ tabTitle, content })
+
+    this.tabs.querySelector('.active')?.classList.remove('active')
+    this.tabsContent.querySelector('.tab-content:not([hidden])')?.setAttribute('hidden', true)
+
+    tab.className = 'tab active'
     btnClose.className = 'close'
+    tabContent.className = 'tab-content'
+
+    tab.dataset.index = index
+
+    tabContent.innerHTML = content
     btnClose.innerHTML = '&times;'
-    const tabTitle = 'tab' + (this.data.length + 1)
+
     tab.append(tabTitle, btnClose)
+    this.tabsContent.append(tabContent)
     this.tabs.lastChild.before(tab)
-    // this.data.push({ tabTitle: `${tabTitle}`, content: `${tabContent}`})
+
     this.colorize()
+  }
+
+  removeTab(index) {
+    this.data.splice(index, 1)
+    this.tabs.children[index].remove()
+    this.tabsContent.children[index].remove()
+
+    for (let i = index; i < this.data.length; i++) {
+      this.tabs.children[i].dataset.index = i
+    }
+
+    if (!this.tabs.querySelector('.active') && this.data.length) {
+      if (index == 0) index = 1
+      this.tabs.children[index - 1].classList.add('active')
+      this.tabsContent.children[index - 1].hidden = false
+    }
+
+  }
+
+  generateContentGPT() {
+    const url = 'https://api.openai.com/v1/chat/completions';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`
+    };
+
+    const data = JSON.stringify({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: prompt('enter question for AI') }],
+      temperature: 0.7
+    });
+
+    return fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: data
+    })
+      .then(response => response.json())
+      .then(data => data.choices[0].message.content)
+
   }
 
   appendTo(parent) {
